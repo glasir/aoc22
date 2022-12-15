@@ -14,4 +14,8 @@ pub mod day7;
 pub mod day8;
 pub mod day9;
 
+// TODO: finish up days 11-13 in Rust
+
+pub mod day14;
+
 aoc_lib! { year = 2022 }
