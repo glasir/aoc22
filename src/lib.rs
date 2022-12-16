@@ -14,8 +14,8 @@ pub mod day08;
 pub mod day09;
 pub mod day10;
 pub mod day11;
-// TODO: redo days 12-13 in Rust
-// pub mod day12;
+pub mod day12;
+// TODO: redo day 13 in Rust
 // pub mod day13;
 pub mod day14;
 pub mod day15;
