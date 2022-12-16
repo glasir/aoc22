@@ -16,18 +16,19 @@ enum Data {
     List(Vec<Data>),
 }
 
+impl Data {
+    // Creates a Data containing a list of a single element.
+    fn list_of(value: i32) -> Self {
+        Data::List(vec![Data::Int(value)])
+    }
+}
+
 impl PartialOrd for Data {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Data::Int(lhs), Data::Int(rhs)) => lhs.partial_cmp(rhs),
-            (Data::Int(lhs), Data::List(_)) => {
-                let self_as_list = Data::List(vec![Data::Int(*lhs)]);
-                self_as_list.partial_cmp(other)
-            }
-            (Data::List(_), Data::Int(rhs)) => {
-                let other_as_list = Data::List(vec![Data::Int(*rhs)]);
-                self.partial_cmp(&other_as_list)
-            }
+            (Data::Int(lhs), Data::List(_)) => Data::list_of(*lhs).partial_cmp(other),
+            (Data::List(_), Data::Int(rhs)) => self.partial_cmp(&Data::list_of(*rhs)),
             (Data::List(lhs), Data::List(rhs)) => {
                 for (l, r) in zip(lhs, rhs) {
                     match l.partial_cmp(r) {
@@ -78,8 +79,8 @@ pub fn part2(input: &str) -> usize {
     let (_, packets) = parse_input(input).expect("parse error");
 
     // We can avoid sorting by just comparing each divider against every packet.
-    let divider0 = Data::List(vec![Data::Int(2)]);
-    let divider1 = Data::List(vec![Data::Int(6)]);
+    let divider0 = Data::list_of(2);
+    let divider1 = Data::list_of(6);
 
     let mut less_than_first = 0;
     let mut less_than_second = 0;
