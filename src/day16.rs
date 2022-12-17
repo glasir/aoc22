@@ -1,8 +1,3 @@
-// Read in the full graph
-// Identify the nodes with nonzero flow
-// Find the pairwise distances between { AA } U { nodes with nonzero flow }
-// Backtracking on sequences to find the best flow
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -18,7 +13,7 @@ use std::{cmp::max, collections::HashMap, fmt::Display};
 // This is *much* faster than using e.g. a HashSet<String>.
 //
 // This is an extremely limited implementation that supports at most 32 elements.
-// It's fine for this problem, though, since we only have 15 relevant nodes.
+// It's fine for this problem, though, since we only have ~15 relevant nodes.
 #[derive(Clone)]
 struct Bitset {
     bits: u32,
@@ -77,6 +72,20 @@ impl<'a> Iterator for BitsetIterator<'a> {
     }
 }
 
+/**
+ * A naive representation of the graph of rooms.
+ *
+ * Graph.nodes maps room labels to flow capacity;
+ * Graph.nodes map room labels to { labels of connected rooms }.
+ *
+ * This is quite inefficient, so this representation is mostly used
+ * as an intermediate step to producing a much more optimized version.
+ */
+struct Graph {
+    nodes: HashMap<String, u32>,
+    edges: HashMap<String, Vec<String>>,
+}
+
 fn parse_room(input: &str) -> IResult<&str, (&str, u32, Vec<&str>)> {
     tuple((
         preceded(tag("Valve "), alpha1),
@@ -90,31 +99,6 @@ fn parse_room(input: &str) -> IResult<&str, (&str, u32, Vec<&str>)> {
             multispace0,
         ),
     ))(input)
-}
-
-#[derive(Debug)]
-struct Graph {
-    nodes: HashMap<String, u32>,
-    edges: HashMap<String, Vec<String>>,
-}
-
-// The full graph has a lot of nodes with value 0.
-// We don't really care about this, so after reading in the full graph,
-// we'll do some work to "compress" it:
-//   1. Eliminate zero-valued nodes
-//   2. Synthesize edges between nonzero-valued nodes with weights derived from the original graph
-//   3. Represent the nodes with integers instead of strings
-//   4. Store values and edge weights in arrays for fast lookup
-// Assumes that there are at most 16 nodes in the compressed graph. My input has exactly 16; YMMV.
-#[derive(Debug)]
-struct CompressedGraph {
-    flows: [u32; 16],
-    distances: [[u32; 16]; 16],
-    size: usize,
-
-    // Because we're eliminating the string labels, we need to separately store
-    // which integer ID the starting point was mapped to.
-    start: usize,
 }
 
 fn parse_graph(input: &str) -> Graph {
@@ -135,6 +119,25 @@ fn parse_graph(input: &str) -> Graph {
     }
 }
 
+/* The full graph has a lot of nodes with value 0.
+ * We don't really care about those, so after reading in the full graph,
+ * we'll do some work to "compress" it:
+ *   1. Eliminate zero-valued nodes.
+ *   2. Precompute pairwise distances between all nonzero-valued nodes
+ *      (effectively converting it to a complete graph).
+ *   3. Represent the nodes with integers instead of strings
+ *   4. Store values and edge weights in arrays for fast lookup
+ *
+ * The starting node is always mapped to the highest ID to help optimize some later stuff;
+ * specifically, its ID is always graph.size - 1.
+ */
+const MAX_IMPORTANT_ROOMS: usize = 16;
+struct CompressedGraph {
+    flows: [u32; MAX_IMPORTANT_ROOMS],
+    distances: [[u32; MAX_IMPORTANT_ROOMS]; MAX_IMPORTANT_ROOMS],
+    size: usize,
+}
+
 fn compress_graph(graph: &Graph) -> CompressedGraph {
     // Find all of the rooms with nonzero flow.
     // These (and AA) are the only ones we actually care about.
@@ -151,6 +154,9 @@ fn compress_graph(graph: &Graph) -> CompressedGraph {
         .collect();
 
     // Find pairwise distances between each of the important rooms.
+    // This uses N^2 runs of Dijkstra, where N is the number of important rooms.
+    // There is probably a more efficient way - I thought about Floyd-Warshall
+    // but there are quite a lot of unimportant rooms. *shrug*
     let mut pairwise_distances: HashMap<(String, String), u32> = HashMap::new();
     for source in important_rooms.iter() {
         for dest in important_rooms.iter() {
@@ -180,8 +186,8 @@ fn compress_graph(graph: &Graph) -> CompressedGraph {
     // Let's produce an efficient representation of that smaller graph.
 
     // First, convert string labels to numeric IDs.
-    // There is some ugly hackiness to make sure that "AA" has the largest ID.
-    // This simplifies some things quite a bit later.
+    // There is some hackiness to make sure that "AA" has the largest ID.
+    // This is messy now but greatly simplifies some things later.
     let mut label_to_id: HashMap<String, usize> = HashMap::new();
     for label in important_rooms.iter() {
         if label != "AA" {
@@ -191,7 +197,7 @@ fn compress_graph(graph: &Graph) -> CompressedGraph {
     label_to_id.insert(String::from("AA"), label_to_id.len());
 
     // Convert the HashMap of flows to a flat array, indexed by room ID.
-    let mut flows = [0; 16];
+    let mut flows = [0; MAX_IMPORTANT_ROOMS];
     for label in important_rooms.iter() {
         let room_id = label_to_id[label];
         flows[room_id] = graph.nodes[label];
@@ -199,7 +205,7 @@ fn compress_graph(graph: &Graph) -> CompressedGraph {
 
     // Instead of using nested HashMaps to store distances between nodes,
     // use a 2d array, indexed by source ID and destination ID.
-    let mut distances = [[0; 16]; 16];
+    let mut distances = [[0; MAX_IMPORTANT_ROOMS]; MAX_IMPORTANT_ROOMS];
     for ((source, dest), distance) in pairwise_distances.iter() {
         let source_id = label_to_id[source];
         let dest_id = label_to_id[dest];
@@ -210,7 +216,6 @@ fn compress_graph(graph: &Graph) -> CompressedGraph {
         flows,
         distances,
         size: important_rooms.len(),
-        start: label_to_id["AA"],
     }
 }
 
@@ -281,7 +286,8 @@ fn backtrack(
             continue;
         }
 
-        // Once we go to that room, there'll never be a reason to go back.
+        // Once we go to that room, there'll never be a reason to go back,
+        // so remove it from the list of active rooms.
         let mut next_possibilities = active_rooms.clone();
         next_possibilities.remove(next_room);
 
@@ -299,15 +305,46 @@ fn backtrack(
     best
 }
 
-// Generates all partitions of a set of n objects into 2 subsets.
-// Returns a series of pairs of bitsets representing the subsets.
+/**
+ * Generates all partitions of a set of n objects into 2 subsets.
+ * Returns a series of pairs of bitsets representing the subsets.
+ *
+ * The implementation relies heavily on the internal representation of a bitset.
+ * Specifically, it uses the fact that a bitset containing [0, 1, ..., n-1]
+ * is stored as 0b011...11 (n '1' bits). That means that we can
+ * generate partitions by simply counting from 0 up to 2^n - 1;
+ * the '0' bits correspond to elements in one partition, while the
+ * '1' bits correspond to elements in the other.
+ *
+ * Example: if n = 6 and the counter is 0b011001, then the partitions
+ * are {0, 3, 4} (the '1' bits) and {1, 2, 5} (the '0' bits).
+ * To get the next pair of partitions, add 1 to the counter to get
+ * 0b011010, representing {1, 3, 4} and {0, 2, 5}.
+ *
+ * Then because a bitset is just a u32, we can create bitsets representing
+ * the two partitions as just `counter` and `!counter`, modulo
+ * masking out some irrelevant high bits.
+ *
+ * As an additional optimization, we can use the fact that both
+ * partitions are processed identically to skip generating half of them.
+ * For example, ({0, 1, 3, 4}, {2, 5}) and ({2, 5}, {0, 1, 3, 4}) will
+ * give the same results, so don't bother checking both.
+ * This is implemented using a popcount, which limits the first partition
+ * to having <= half of its bits set. There is still some repeated work,
+ * but it cuts the number of pairs returned by ~1/2 and is fast enough.
+ */
 fn partitions(n: usize) -> impl Iterator<Item = (Bitset, Bitset)> {
     let max_value = 1u32 << n;
     let mask = max_value - 1;
+    let max_bits = (n as u32) / 2;
 
-    (0..max_value).map(move |value| {
+    (0..max_value).filter_map(move |value| {
+        if value.count_ones() > max_bits {
+            return None;
+        }
+
         let inverted = mask & !value;
-        (Bitset { bits: value }, Bitset { bits: inverted })
+        Some((Bitset { bits: value }, Bitset { bits: inverted }))
     })
 }
 
@@ -316,20 +353,21 @@ pub fn part1(input: &str) -> u32 {
     let full_graph = parse_graph(input);
     let graph = compress_graph(&full_graph);
 
-    // At the start, all rooms are active except the starting room.
-    // We put in a lot of effort to make sure that the starting room
-    // would be assigned the highest ID; use that now.
+    // At the start, all rooms are active except the starting room,
+    // which we already know has the highest ID.
+    let start_room = graph.size - 1;
     let active_rooms = Bitset {
-        bits: (1u32 << (graph.size - 1)) - 1,
+        bits: (1u32 << start_room) - 1,
     };
 
-    backtrack(&graph, 30, graph.start, active_rooms)
+    backtrack(&graph, 30, start_room, active_rooms)
 }
 
 #[aoc(day16, part2)]
 pub fn part2(input: &str) -> u32 {
     let full_graph = parse_graph(input);
     let graph = compress_graph(&full_graph);
+    let start_room = graph.size - 1;
 
     // We'll handle some valves, and the elephant will handle others.
     // There'll never be any reason for both us and the elephant to visit the same room.
@@ -337,11 +375,12 @@ pub fn part2(input: &str) -> u32 {
     // and find the most pressure releasable for each subset in the time limit.
     // The best result over all partitionings is our answer.
 
-    // There are 15 active nodes, so there will be 2^14 distinct partitionings; hope part 1 is efficient!
+    // There are 15 active nodes, so there will be 2^14 distinct partitionings.
+    // Better hope the backtracking code from part 1 is efficient!
     let mut best = 0;
-    for (my_rooms, elephant_rooms) in partitions(graph.size - 1) {
-        let my_best = backtrack(&graph, 26, graph.start, my_rooms);
-        let elephant_best = backtrack(&graph, 26, graph.start, elephant_rooms);
+    for (my_rooms, elephant_rooms) in partitions(start_room) {
+        let my_best = backtrack(&graph, 26, start_room, my_rooms);
+        let elephant_best = backtrack(&graph, 26, start_room, elephant_rooms);
         best = max(best, my_best + elephant_best);
     }
 
