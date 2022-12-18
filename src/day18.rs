@@ -1,6 +1,6 @@
 use std::{
     cmp::{max, min},
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
 };
 
 use nom::{
@@ -10,7 +10,6 @@ use nom::{
     sequence::{terminated, tuple},
     IResult,
 };
-use pathfinding::prelude::astar;
 
 type Point = (i32, i32, i32);
 type State = HashSet<Point>;
@@ -41,13 +40,13 @@ fn neighbors(point: &Point) -> Vec<Point> {
 }
 
 #[aoc(day18, part1)]
-pub fn part1(state: &State) -> usize {
-    state
+pub fn part1(lava: &State) -> usize {
+    lava
         .iter()
         .map(|point| {
             neighbors(point)
                 .iter()
-                .filter(|n| !state.contains(n))
+                .filter(|n| !lava.contains(n))
                 .count()
         })
         .sum()
@@ -61,22 +60,21 @@ fn upper_bounds(lhs: &Point, rhs: &Point) -> Point {
     (max(lhs.0, rhs.0), max(lhs.1, rhs.1), max(lhs.2, rhs.2))
 }
 
-fn open_neighbors(state: &State, point: &Point) -> Vec<(Point, i32)> {
-    neighbors(point)
-        .iter()
-        .filter(|p| !state.contains(p))
-        .map(|p| (*p, 1))
-        .collect()
+fn inside(point: &Point, lower_bound: &Point, upper_bound: &Point) -> bool {
+    lower_bound.0 <= point.0 && point.0 <= upper_bound.0 &&
+    lower_bound.1 <= point.1 && point.1 <= upper_bound.1 &&
+    lower_bound.2 <= point.2 && point.2 <= upper_bound.2
 }
+
 
 #[aoc(day18, part2)]
 pub fn part2(input: &State) -> usize {
-    let mut state = input.clone();
+    let lava = input.clone();
 
     // Find the bounding box for the lava.
     const SMALLEST_POINT: Point = (i32::MIN, i32::MIN, i32::MIN);
     const LARGEST_POINT: Point = (i32::MAX, i32::MAX, i32::MAX);
-    let (lower_bounds, upper_bounds) = state.iter().fold(
+    let (mut lower_bounds, mut upper_bounds) = lava.iter().fold(
         (LARGEST_POINT, SMALLEST_POINT),
         |bounds: (Point, Point), point| {
             (
@@ -86,48 +84,40 @@ pub fn part2(input: &State) -> usize {
         },
     );
 
-    // Pick an arbitrary point outside the bounding box
-    let target_point = (lower_bounds.0 - 1, lower_bounds.1, lower_bounds.2);
+    // Extend the bounding box by 1 in each direction to make sure that there
+    // is a shell of "exterior" points outside the lava.
+    lower_bounds = (lower_bounds.0 - 1, lower_bounds.1 - 1, lower_bounds.2 - 1);
+    upper_bounds = (upper_bounds.0 + 1, upper_bounds.1 + 1, upper_bounds.2 + 1);
 
-    // For every point in the bounding box, see if there's an uninterrupted path to it from the target point.
-    // If there isn't, that point is part of a "bubble" in the lava; fill it in with lava.
+    // Pick an arbitrary point in the (extended) bounding box that we *know* is air.
+    let start_point = (lower_bounds.0, lower_bounds.1, lower_bounds.2);
 
-    // Note: running 20^3 iterations of A* is obviously not very efficient.
-    // I was trying to figure out how to flood-fill the "inside" of the lava blob, but
-    // got stuck on how to find initial points on the inside.
-    // Then I realized I could use a pathfinding algorithm: if I start from any point,
-    // and can find a path to a point I *know* is outside the lava, that point must also
-    // be outside.
-    // Then we can mark every point we *couldn't* reach as "inside" and re-run part 1.
-    // I don't love this solution, but it runs acceptably fast (300ms) and works...
-    for x in lower_bounds.0..=upper_bounds.0 {
-        for y in lower_bounds.1..=upper_bounds.1 {
-            for z in lower_bounds.2..=upper_bounds.2 {
-                if astar(
-                    &(x, y, z),
-                    |p| open_neighbors(&state, p),
-                    |p| {
-                        (target_point.0 - p.0).abs()
-                            + (target_point.1 - p.1).abs()
-                            + (target_point.2 - p.2).abs()
-                    },
-                    |p| *p == target_point,
-                )
-                .is_none()
-                {
-                    state.insert((x, y, z));
-                }
+    // Run BFS starting from that point to identify all points on the "outside" of the lava.
+    // Many thanks to zarvox for pointing out this approach!
+    let mut queue: VecDeque<Point> = VecDeque::new();
+    let mut exterior: HashSet<Point> = HashSet::new();
+    queue.push_back(start_point);
+    exterior.insert(start_point);
+
+    while !queue.is_empty() {
+        let current = queue.pop_front().unwrap();
+        for p in neighbors(&current) {
+            if !exterior.contains(&p) && !lava.contains(&p) && inside(&p, &lower_bounds, &upper_bounds) {
+                exterior.insert(p);
+                queue.push_back(p);
             }
         }
     }
 
-    // Now re-run part 1 to find the adjusted number of faces.
-    state
+    // Now copy/paste from part 1 to find the number of exposed faces.
+    // It's actually a little nicer now because we have an explicit list
+    // of all exterior points!
+    lava
         .iter()
         .map(|point| {
             neighbors(point)
                 .iter()
-                .filter(|n| !state.contains(n))
+                .filter(|n| exterior.contains(n))
                 .count()
         })
         .sum()
