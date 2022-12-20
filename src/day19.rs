@@ -1,4 +1,16 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug},
+};
+
+enum Material {
+    Ore(u32),
+    Clay(u32),
+    Obsidian(u32),
+    Geode(u32),
+}
+
+use Material::*;
 
 /**
  * A generic bag of one of more resources.
@@ -7,54 +19,134 @@ use std::collections::HashMap;
  *  * how many of each resource does a factory have?
  *  * how many of each type of robot does a factory have?
  *  * how much does one type of robot cost?
+ *
+ * Since we'll never need to track more than ~30 resources of any type,
+ * this is internally represented as a 32-bit integer:
+ *32       24       16        8        0
+ * +--------+--------+--------+--------+
+ * |  geode |obsidian|  clay  |  ore   |
+ * +--------+--------+--------+--------+
+ *
+ * This makes comparisons, addition, and subtraction very fast.
  */
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-struct Resources {
-    ore: u32,
-    clay: u32,
-    obsidian: u32,
-    geode: u32,
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+pub struct Resources {
+    data: u32,
 }
 
 impl Resources {
     fn add(&self, other: Self) -> Self {
-        Resources {
-            ore: self.ore + other.ore,
-            clay: self.clay + other.clay,
-            obsidian: self.obsidian + other.obsidian,
-            geode: self.geode + other.geode,
+        Self {
+            data: self.data + other.data,
+        }
+    }
+
+    fn add_one(&self, material: Material) -> Self {
+        Self {
+            data: self.data + Resources::encode_material(&material),
         }
     }
 
     fn checked_sub(&self, other: Self) -> Option<Self> {
-        let Some(ore) = self.ore.checked_sub(other.ore) else { return None };
-        let Some(clay) = self.clay.checked_sub(other.clay) else { return None };
-        let Some(obsidian) = self.obsidian.checked_sub(other.obsidian) else { return None };
-        let Some(geode) = self.geode.checked_sub(other.geode) else { return None };
+        let difference = self.data.wrapping_sub(other.data);
 
-        Some(Resources {
-            ore,
-            clay,
-            obsidian,
-            geode,
-        })
+        // We're not really subtracting u32's, we're subtracting four u8's in parallel.
+        // Any of those u8 subtractions could have underflowed.
+        // Since we will never store large numbers in this struct, we know:
+        //   * the highest bit should *never* be set unless there's been an underflow;
+        //   * the largest possible underflow is < 128
+        // This means that a u8 subtraction has underflowed iff the high bit of any
+        // byte is set, which we can check in a single operation.
+        if difference & 0x80808080 == 0 {
+            Some(Self { data: difference })
+        } else {
+            None
+        }
+    }
+
+    fn new() -> Self {
+        Self { data: 0 }
+    }
+
+    fn from(materials: &[Material]) -> Self {
+        let mut data = 0;
+        for material in materials {
+            data += Resources::encode_material(material);
+        }
+        Self { data }
+    }
+
+    fn from_one(material: Material) -> Self {
+        Self {
+            data: Self::encode_material(&material),
+        }
+    }
+
+    fn encode_material(material: &Material) -> u32 {
+        match material {
+            Ore(count) => *count,
+            Clay(count) => *count << 8,
+            Obsidian(count) => *count << 16,
+            Geode(count) => *count << 24,
+        }
+    }
+
+    fn ore(&self) -> u32 {
+        self.data & 0x000000FF
+    }
+
+    fn clay(&self) -> u32 {
+        (self.data & 0x0000FF00) >> 8
+    }
+
+    fn obsidian(&self) -> u32 {
+        (self.data & 0x00FF0000) >> 16
+    }
+
+    // Included for completeness; we've optimized out all calls to this.
+    #[allow(dead_code)]
+    fn geode(&self) -> u32 {
+        (self.data & 0xFF000000) >> 24
+    }
+}
+
+impl fmt::Debug for Resources {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{ ore: {}, clay: {}, obsidian: {}, geode: {} }}",
+            self.data & 0x000000FF,
+            (self.data & 0x0000FF00) >> 8,
+            (self.data & 0x00FF0000) >> 16,
+            (self.data & 0xFF000000) >> 24
+        )
     }
 }
 
 #[derive(Clone, Debug)]
-struct RobotCosts {
+pub struct RobotCosts {
     ore: Resources,
     clay: Resources,
     obsidian: Resources,
     geode: Resources,
 }
 
-#[derive(Clone, Debug)]
-struct Factory {
+#[derive(Clone)]
+pub struct RobotFactory {
     id: u32,
     resources: Resources,
     robots: Resources,
     costs: RobotCosts,
+}
+
+impl fmt::Debug for RobotFactory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "RobotFactory({}) {{ resources: {:?}, robots: {:?} }}",
+            self.id, self.resources, self.robots
+        )
+    }
 }
 
 #[derive(Hash, PartialEq, Eq, Debug)]
@@ -64,131 +156,104 @@ struct State {
     robots: Resources,
 }
 
-impl Factory {
+impl RobotFactory {
     fn new(id: u32, costs: RobotCosts) -> Self {
-        Factory {
+        RobotFactory {
             id,
-            resources: Resources {
-                ore: 0,
-                clay: 0,
-                obsidian: 0,
-                geode: 0,
-            },
-            robots: Resources {
-                ore: 1,
-                clay: 0,
-                obsidian: 0,
-                geode: 0,
-            },
+            resources: Resources::new(),
+            robots: Resources::from_one(Ore(1)),
             costs,
         }
     }
 
-    fn do_nothing(&self) -> Factory {
-        Factory {
-            id: self.id,
-            resources: self.resources.add(self.robots),
-            robots: self.robots,
-            costs: self.costs.clone(),
-        }
-    }
-
-    fn build_ore_robot(&self) -> Option<Factory> {
+    fn build_ore_robot(&self, time_remaining: u32) -> Option<(u32, RobotFactory)> {
         // Optimization: never, ever build more ore robots than the largest ore cost.
+        // This would cause us to generate more ore per minute than we can spend.
         let highest_ore_cost = self
             .costs
             .ore
-            .ore
-            .max(self.costs.clay.ore)
-            .max(self.costs.obsidian.ore)
-            .max(self.costs.geode.ore);
-        if self.robots.ore >= highest_ore_cost {
+            .ore()
+            .max(self.costs.clay.ore())
+            .max(self.costs.obsidian.ore())
+            .max(self.costs.geode.ore());
+        if self.robots.ore() >= highest_ore_cost {
             return None;
         }
 
-        self.resources.checked_sub(self.costs.ore).map(|extras| {
-            let resources = extras.add(self.robots);
-            let robots = self.robots.add(Resources {
-                ore: 1,
-                clay: 0,
-                obsidian: 0,
-                geode: 0,
-            });
-            Factory {
-                id: self.id,
-                resources,
-                robots,
-                costs: self.costs.clone(),
-            }
-        })
+        self.build_robot(Ore(1), self.costs.ore, time_remaining)
     }
 
-    fn build_clay_robot(&self) -> Option<Factory> {
-        if self.robots.clay >= self.costs.obsidian.clay {
+    fn build_clay_robot(&self, time_remaining: u32) -> Option<(u32, RobotFactory)> {
+        // Never build more clay robots than the highest clay cost.
+        // Only obsidian robots cost clay, so this is thankfully easier than ore.
+        if self.robots.clay() >= self.costs.obsidian.clay() {
             return None;
         }
 
-        self.resources.checked_sub(self.costs.clay).map(|extras| {
-            let resources = extras.add(self.robots);
-            let robots = self.robots.add(Resources {
-                ore: 0,
-                clay: 1,
-                obsidian: 0,
-                geode: 0,
-            });
-            Factory {
-                id: self.id,
-                resources,
-                robots,
-                costs: self.costs.clone(),
-            }
-        })
+        self.build_robot(Clay(1), self.costs.clay, time_remaining)
     }
 
-    fn build_obsidian_robot(&self) -> Option<Factory> {
-        if self.robots.obsidian >= self.costs.geode.obsidian {
+    fn build_obsidian_robot(&self, time_remaining: u32) -> Option<(u32, RobotFactory)> {
+        // Never build more obsidian robots than the highest obsidian cost.
+        if self.robots.obsidian() >= self.costs.geode.obsidian() {
             return None;
         }
 
-        self.resources
-            .checked_sub(self.costs.obsidian)
-            .map(|extras| {
-                let resources = extras.add(self.robots);
-                let robots = self.robots.add(Resources {
-                    ore: 0,
-                    clay: 0,
-                    obsidian: 1,
-                    geode: 0,
-                });
-                Factory {
-                    id: self.id,
-                    resources,
-                    robots,
-                    costs: self.costs.clone(),
-                }
-            })
+        // We will always have at least one ore robot; we need at least one
+        // clay robot to be able to *eventually* produce an obsidian robot.
+        if self.robots.clay() == 0 {
+            return None;
+        }
+
+        self.build_robot(Obsidian(1), self.costs.obsidian, time_remaining)
     }
 
-    fn build_geode_robot(&self) -> Option<Factory> {
-        self.resources.checked_sub(self.costs.geode).map(|extras| {
-            let resources = extras.add(self.robots);
-            let robots = self.robots.add(Resources {
-                ore: 0,
-                clay: 0,
-                obsidian: 0,
-                geode: 1,
-            });
-            Factory {
-                id: self.id,
-                resources,
-                robots,
-                costs: self.costs.clone(),
+    fn build_geode_robot(&self, time_remaining: u32) -> Option<(u32, RobotFactory)> {
+        if self.robots.obsidian() == 0 {
+            return None;
+        }
+
+        // Optimization: we never need to track the number of geode robots, since
+        // we count up the geodes it opens as soon as it's built (in find_best()).
+        // So, add "zero" geode robots to our state to simplify things.
+        self.build_robot(Geode(0), self.costs.geode, time_remaining)
+    }
+
+    fn build_robot(
+        &self,
+        robot_type: Material,
+        cost: Resources,
+        time_remaining: u32,
+    ) -> Option<(u32, RobotFactory)> {
+        // It always takes 1 minute to build the robot.
+        let mut new_time_remaining = time_remaining - 1;
+
+        // Figure out how long it'll take to gather the required resources.
+        let mut resources = self.resources;
+        loop {
+            if new_time_remaining == 0 {
+                return None;
+            } else if let Some(after_build) = resources.checked_sub(cost) {
+                resources = after_build.add(self.robots);
+                return Some((
+                    new_time_remaining,
+                    RobotFactory {
+                        id: self.id,
+                        resources,
+                        robots: self.robots.add_one(robot_type),
+                        costs: self.costs.clone(),
+                    },
+                ));
+            } else {
+                new_time_remaining -= 1;
+                resources = resources.add(self.robots);
             }
-        })
+        }
     }
 }
 
-fn create_factories(input: &str) -> Vec<Factory> {
+#[aoc_generator(day19)]
+fn create_factories(input: &str) -> Vec<RobotFactory> {
     let re = regex::Regex::new(r"(\d+)").unwrap();
 
     input
@@ -200,50 +265,36 @@ fn create_factories(input: &str) -> Vec<Factory> {
                 .collect();
             let id = numbers[0];
             let costs = RobotCosts {
-                ore: Resources {
-                    ore: numbers[1],
-                    clay: 0,
-                    obsidian: 0,
-                    geode: 0,
-                },
-                clay: Resources {
-                    ore: numbers[2],
-                    clay: 0,
-                    obsidian: 0,
-                    geode: 0,
-                },
-                obsidian: Resources {
-                    ore: numbers[3],
-                    clay: numbers[4],
-                    obsidian: 0,
-                    geode: 0,
-                },
-                geode: Resources {
-                    ore: numbers[5],
-                    clay: 0,
-                    obsidian: numbers[6],
-                    geode: 0,
-                },
+                ore: Resources::from_one(Ore(numbers[1])),
+                clay: Resources::from_one(Ore(numbers[2])),
+                obsidian: Resources::from(&[Ore(numbers[3]), Clay(numbers[4])]),
+                geode: Resources::from(&[Ore(numbers[5]), Obsidian(numbers[6])]),
             };
 
-            Factory::new(id, costs)
+            RobotFactory::new(id, costs)
         })
         .collect()
 }
 
-// Returns the maximum number of opened geodes possible starting from
-// an initial factory state after `time_remaining` minutes.
-fn find_best(factory: &Factory, time_remaining: u32, memo: &mut HashMap<State, u32>) -> u32 {
-    // If there's no time remaining, return the number of geodes already opened.
-    if time_remaining == 0 {
-        return factory.resources.geode;
-    }
-
+/**
+ * Returns the maximum number of geodes that can be opened by robots produced
+ * on or after the current time.
+ *
+ * This somewhat-awkward phrasing means that we no longer need to track the
+ * total number of geodes or geode robots; this reduces the number of states.
+ *
+ * Inputs:
+ *  * the current factory state
+ *  * the amount of time remaining
+ *  * a cache of visited states
+ */
+fn find_best(factory: &RobotFactory, time_remaining: u32, memo: &mut HashMap<State, u32>) -> u32 {
+    // If there's no time left, we can neither open geodes nor build robots.
     // If there's only one minute left, we can make some new robots, but
-    // they won't have time to produce anything. So, all we can do is use
-    // existing robots to open some more geodes.
-    if time_remaining == 1 {
-        return factory.resources.geode + factory.robots.geode;
+    // they won't have time to produce anything.
+    // Either way, no new robots can open geodes, so return 0.
+    if time_remaining <= 1 {
+        return 0;
     }
 
     // If we've already explored this state, we know the answer.
@@ -258,37 +309,43 @@ fn find_best(factory: &Factory, time_remaining: u32, memo: &mut HashMap<State, u
     }
 
     // There are at least two minutes left, so we have options.
-    //  1. Figure out what robots the factory can create
-    //  2. Generate a factory state after executing each option
-    //  3. Recurse with an updated factory state and time_remaining
+    //  1. Figure out what robots the factory can build (possibly over several minutes!).
+    //  2. Generate the factory state and updated time remaining for each option.
+    //  3. Recurse with an updated factory state and time_remaining.
     //  4. Find the best option.
-    let mut best: u32;
+    let mut best: u32 = 0;
 
-    // Optimization: if we *can* build a geode robot, we should do so.
-    // No other options needs to be explored.
-    if let Some(with_geode_robot) = factory.build_geode_robot() {
-        let build_geode = find_best(&with_geode_robot, time_remaining - 1, memo);
-        best = build_geode;
-    } else {
-        // We can always do nothing (e.g., to save up for a more expensive robot).
-        let do_nothing = find_best(&factory.do_nothing(), time_remaining - 1, memo);
-        best = do_nothing;
+    if let Some((new_time_remaining, with_geode_robot)) = factory.build_geode_robot(time_remaining)
+    {
+        // The new geode robot will open 1 geode per minute after being built.
+        best = new_time_remaining;
 
-        // See whether we can make each type of robot in turn.
-        if let Some(with_ore_robot) = factory.build_ore_robot() {
-            let build_ore = find_best(&with_ore_robot, time_remaining - 1, memo);
-            best = best.max(build_ore);
+        // Figure out how many geodes can be opened by future robots we build.
+        best += find_best(&with_geode_robot, new_time_remaining, memo);
+
+        // Optimization: if we *can* build a geode robot this minute, we should do so.
+        // No other options needs to be explored.
+        if new_time_remaining == time_remaining - 1 {
+            return best;
         }
+    }
 
-        if let Some(with_clay_robot) = factory.build_clay_robot() {
-            let build_clay = find_best(&with_clay_robot, time_remaining - 1, memo);
-            best = best.max(build_clay);
-        }
+    // See whether we can make each type of robot in turn.
+    if let Some((new_time_remaining, with_ore_robot)) = factory.build_ore_robot(time_remaining) {
+        let build_ore = find_best(&with_ore_robot, new_time_remaining, memo);
+        best = best.max(build_ore);
+    }
 
-        if let Some(with_obsidian_robot) = factory.build_obsidian_robot() {
-            let build_obsidian = find_best(&with_obsidian_robot, time_remaining - 1, memo);
-            best = best.max(build_obsidian);
-        }
+    if let Some((new_time_remaining, with_clay_robot)) = factory.build_clay_robot(time_remaining) {
+        let build_clay = find_best(&with_clay_robot, new_time_remaining, memo);
+        best = best.max(build_clay);
+    }
+
+    if let Some((new_time_remaining, with_obsidian_robot)) =
+        factory.build_obsidian_robot(time_remaining)
+    {
+        let build_obsidian = find_best(&with_obsidian_robot, new_time_remaining, memo);
+        best = best.max(build_obsidian);
     }
 
     // The factory states store an up-to-date record of the geodes opened,
@@ -301,14 +358,11 @@ fn find_best(factory: &Factory, time_remaining: u32, memo: &mut HashMap<State, u
 }
 
 #[aoc(day19, part1)]
-pub fn part1(input: &str) -> u32 {
-    let factories = create_factories(input);
-
+pub fn part1(factories: &[RobotFactory]) -> u32 {
     let mut result: u32 = 0;
     for factory in factories.iter() {
         let mut memo = HashMap::new();
         let factory_best = find_best(factory, 24, &mut memo);
-        println!("Best from factory {}: {}", factory.id, factory_best);
         result += factory_best * factory.id;
     }
 
@@ -316,14 +370,13 @@ pub fn part1(input: &str) -> u32 {
 }
 
 #[aoc(day19, part2)]
-pub fn part2(input: &str) -> u32 {
-    let best: Vec<u32> = create_factories(input)
+pub fn part2(factories: &[RobotFactory]) -> u32 {
+    let best: Vec<u32> = factories
         .iter()
         .take(3)
         .map(|factory| find_best(factory, 32, &mut HashMap::new()))
         .collect();
 
-    println!("Best results: {:?}", best);
     best[0] * best[1] * best[2]
 }
 
@@ -331,17 +384,12 @@ pub fn part2(input: &str) -> u32 {
 mod tests {
     use std::fs;
 
-    use super::{part1, part2};
+    use super::{create_factories, part1};
 
     #[test]
     fn test_part1() {
         let input = fs::read_to_string("input/2022/test/day19.txt").expect("missing input");
-        assert_eq!(part1(&input), 33);
-    }
-
-    #[test]
-    fn test_part2() {
-        let input = fs::read_to_string("input/2022/test/day19.txt").expect("missing input");
-        assert_eq!(part2(&input), 4);
+        let factories = create_factories(&input);
+        assert_eq!(part1(&factories), 33);
     }
 }
