@@ -41,8 +41,7 @@ fn neighbors(point: &Point) -> Vec<Point> {
 
 #[aoc(day18, part1)]
 pub fn part1(lava: &State) -> usize {
-    lava
-        .iter()
+    lava.iter()
         .map(|point| {
             neighbors(point)
                 .iter()
@@ -61,11 +60,13 @@ fn upper_bounds(lhs: &Point, rhs: &Point) -> Point {
 }
 
 fn inside(point: &Point, lower_bound: &Point, upper_bound: &Point) -> bool {
-    lower_bound.0 <= point.0 && point.0 <= upper_bound.0 &&
-    lower_bound.1 <= point.1 && point.1 <= upper_bound.1 &&
-    lower_bound.2 <= point.2 && point.2 <= upper_bound.2
+    lower_bound.0 <= point.0
+        && point.0 <= upper_bound.0
+        && lower_bound.1 <= point.1
+        && point.1 <= upper_bound.1
+        && lower_bound.2 <= point.2
+        && point.2 <= upper_bound.2
 }
-
 
 #[aoc(day18, part2)]
 pub fn part2(input: &State) -> usize {
@@ -102,7 +103,10 @@ pub fn part2(input: &State) -> usize {
     while !queue.is_empty() {
         let current = queue.pop_front().unwrap();
         for p in neighbors(&current) {
-            if !exterior.contains(&p) && !lava.contains(&p) && inside(&p, &lower_bounds, &upper_bounds) {
+            if !exterior.contains(&p)
+                && !lava.contains(&p)
+                && inside(&p, &lower_bounds, &upper_bounds)
+            {
                 exterior.insert(p);
                 queue.push_back(p);
             }
@@ -112,8 +116,7 @@ pub fn part2(input: &State) -> usize {
     // Now copy/paste from part 1 to find the number of exposed faces.
     // It's actually a little nicer now because we have an explicit list
     // of all exterior points!
-    lava
-        .iter()
+    lava.iter()
         .map(|point| {
             neighbors(point)
                 .iter()
