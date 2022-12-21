@@ -28,6 +28,10 @@ use Material::*;
  * +--------+--------+--------+--------+
  *
  * This makes comparisons, addition, and subtraction very fast.
+ *
+ * This implementation is pretty unnecessary but I thought it was
+ * an interesting micro-optimization. It probably would have been more
+ * worthwhile to spend the time thinking about better heuristics.
  */
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Resources {
@@ -35,18 +39,30 @@ pub struct Resources {
 }
 
 impl Resources {
+    /**
+     * Adds the contents of two bags of resources.
+     */
     fn add(&self, other: Self) -> Self {
         Self {
             data: self.data + other.data,
         }
     }
 
+    /**
+     * Utility method to add some quantity of a single material.
+     * This comes up a lot (e.g. adding one Ore robot).
+     */
     fn add_one(&self, material: Material) -> Self {
         Self {
             data: self.data + Resources::encode_material(&material),
         }
     }
 
+    /**
+     * Attempts to subtract one bag of resources from another.
+     * Returns None if there isn't enough of any material to subtract,
+     * or Some(difference) if there's enough of each material.
+     */
     fn checked_sub(&self, other: Self) -> Option<Self> {
         let difference = self.data.wrapping_sub(other.data);
 
@@ -64,10 +80,16 @@ impl Resources {
         }
     }
 
+    /**
+     * Creates a new empty bag of materials.
+     */
     fn new() -> Self {
         Self { data: 0 }
     }
 
+    /**
+     * Creates a bag of resources out of a list.
+     */
     fn from(materials: &[Material]) -> Self {
         let mut data = 0;
         for material in materials {
@@ -76,12 +98,18 @@ impl Resources {
         Self { data }
     }
 
+    /**
+     * Creates a bag of resources containing a single material.
+     */
     fn from_one(material: Material) -> Self {
         Self {
             data: Self::encode_material(&material),
         }
     }
 
+    /**
+     * Converts a material to the internal representation.
+     */
     fn encode_material(material: &Material) -> u32 {
         match material {
             Ore(count) => *count,
@@ -90,6 +118,10 @@ impl Resources {
             Geode(count) => *count << 24,
         }
     }
+
+    /*
+     * Getters for each resource type.
+     */
 
     fn ore(&self) -> u32 {
         self.data & 0x000000FF
@@ -166,13 +198,25 @@ impl RobotFactory {
         }
     }
 
+    /*
+     * The next several functions attempt to build a robot starting from an
+     * initial factory state, given the number of minute remaining.
+     *
+     * Returns either:
+     *   * None, if the robot cannot be completed in the time remaining, or
+     *     if building the robot would not be useful;
+     *   * A pair containing the time remaining after the ore robot is
+     *     completed, and the state of the factory once it's finished building.
+     *
+     * Note that it might take multiple minutes to gather the necessary resources
+     * before building the robot!
+     */
+
     fn build_ore_robot(&self, time_remaining: u32) -> Option<(u32, RobotFactory)> {
         // Optimization: never, ever build more ore robots than the largest ore cost.
         // This would cause us to generate more ore per minute than we can spend.
-        let highest_ore_cost = self
-            .costs
-            .ore
-            .ore()
+        #[rustfmt::skip]
+        let highest_ore_cost = self.costs.ore.ore()
             .max(self.costs.clay.ore())
             .max(self.costs.obsidian.ore())
             .max(self.costs.geode.ore());
@@ -209,13 +253,16 @@ impl RobotFactory {
     }
 
     fn build_geode_robot(&self, time_remaining: u32) -> Option<(u32, RobotFactory)> {
+        // Make sure there's an obsidian robot available to gather the resources
+        // necessary for this geode robot.
         if self.robots.obsidian() == 0 {
             return None;
         }
 
         // Optimization: we never need to track the number of geode robots, since
         // we count up the geodes it opens as soon as it's built (in find_best()).
-        // So, add "zero" geode robots to our state to simplify things.
+        // So, add "zero" geode robots to our state to reduce the space of
+        // possible cache keys.
         self.build_robot(Geode(0), self.costs.geode, time_remaining)
     }
 
@@ -228,13 +275,19 @@ impl RobotFactory {
         // It always takes 1 minute to build the robot.
         let mut new_time_remaining = time_remaining - 1;
 
-        // Figure out how long it'll take to gather the required resources.
+        // Simulate minutes repeatedly until we either run out of time, or
+        // have enough resources to build the robot.
         let mut resources = self.resources;
         loop {
             if new_time_remaining == 0 {
+                // Ran out of time! We can't usefully build this robot.
                 return None;
             } else if let Some(after_build) = resources.checked_sub(cost) {
+                // We have enough resources!
+                // Gather resources for the minute we'll spend building the robot.
                 resources = after_build.add(self.robots);
+
+                // Return a factory state with updated resources robots.
                 return Some((
                     new_time_remaining,
                     RobotFactory {
@@ -245,35 +298,13 @@ impl RobotFactory {
                     },
                 ));
             } else {
+                // We don't have enough resources this minute; gather for another
+                // minute then try again.
                 new_time_remaining -= 1;
                 resources = resources.add(self.robots);
             }
         }
     }
-}
-
-#[aoc_generator(day19)]
-fn create_factories(input: &str) -> Vec<RobotFactory> {
-    let re = regex::Regex::new(r"(\d+)").unwrap();
-
-    input
-        .lines()
-        .map(|line| {
-            let numbers: Vec<u32> = re
-                .captures_iter(line)
-                .map(|m| m.get(1).unwrap().as_str().parse::<u32>().unwrap())
-                .collect();
-            let id = numbers[0];
-            let costs = RobotCosts {
-                ore: Resources::from_one(Ore(numbers[1])),
-                clay: Resources::from_one(Ore(numbers[2])),
-                obsidian: Resources::from(&[Ore(numbers[3]), Clay(numbers[4])]),
-                geode: Resources::from(&[Ore(numbers[5]), Obsidian(numbers[6])]),
-            };
-
-            RobotFactory::new(id, costs)
-        })
-        .collect()
 }
 
 /**
@@ -287,6 +318,12 @@ fn create_factories(input: &str) -> Vec<RobotFactory> {
  *  * the current factory state
  *  * the amount of time remaining
  *  * a cache of visited states
+ *
+ * The general approach is to pick out a type of robot to build next and recurse
+ * to find how many geodes we can open given that choice, then return the best.
+ *
+ * My original code simulated each minute rather than each decision; this approach
+ * cuts down the number of branches we explore and is much faster.
  */
 fn find_best(factory: &RobotFactory, time_remaining: u32, memo: &mut HashMap<State, u32>) -> u32 {
     // If there's no time left, we can neither open geodes nor build robots.
@@ -315,46 +352,70 @@ fn find_best(factory: &RobotFactory, time_remaining: u32, memo: &mut HashMap<Sta
     //  4. Find the best option.
     let mut best: u32 = 0;
 
-    if let Some((new_time_remaining, with_geode_robot)) = factory.build_geode_robot(time_remaining)
-    {
+    // build_geode_robot() returns (time remaining after build, factory state after build).
+    if let Some((time, after_build)) = factory.build_geode_robot(time_remaining) {
         // The new geode robot will open 1 geode per minute after being built.
-        best = new_time_remaining;
+        best = time;
 
         // Figure out how many geodes can be opened by future robots we build.
-        best += find_best(&with_geode_robot, new_time_remaining, memo);
+        best += find_best(&after_build, time, memo);
 
         // Optimization: if we *can* build a geode robot this minute, we should do so.
         // No other options needs to be explored.
-        if new_time_remaining == time_remaining - 1 {
+        //
+        // Note that it's possible to construct pathological blueprints for which this
+        // optimization gives the wrong answer! I believe this can only happen when a
+        // geode robot costs very little obsidian, which isn't the case for my input.
+        if time == time_remaining - 1 {
             return best;
         }
     }
 
-    // See whether we can make each type of robot in turn.
-    if let Some((new_time_remaining, with_ore_robot)) = factory.build_ore_robot(time_remaining) {
-        let build_ore = find_best(&with_ore_robot, new_time_remaining, memo);
+    // See whether we can make each type of robot in turn given the robots available.
+    if let Some((time, after_build)) = factory.build_ore_robot(time_remaining) {
+        let build_ore = find_best(&after_build, time, memo);
         best = best.max(build_ore);
     }
 
-    if let Some((new_time_remaining, with_clay_robot)) = factory.build_clay_robot(time_remaining) {
-        let build_clay = find_best(&with_clay_robot, new_time_remaining, memo);
+    if let Some((time, after_build)) = factory.build_clay_robot(time_remaining) {
+        let build_clay = find_best(&after_build, time, memo);
         best = best.max(build_clay);
     }
 
-    if let Some((new_time_remaining, with_obsidian_robot)) =
-        factory.build_obsidian_robot(time_remaining)
-    {
-        let build_obsidian = find_best(&with_obsidian_robot, new_time_remaining, memo);
+    if let Some((time, after_build)) = factory.build_obsidian_robot(time_remaining) {
+        let build_obsidian = find_best(&after_build, time, memo);
         best = best.max(build_obsidian);
     }
 
-    // The factory states store an up-to-date record of the geodes opened,
-    // and the recursive call returns the best *total* number of geodes.
-    // Which is exactly the answer we want!
+    // The recursive call returns the best *total* number of geodes.
     // Store it for later use, then return it.
     memo.insert(state, best);
 
     best
+}
+
+#[aoc_generator(day19)]
+fn create_factories(input: &str) -> Vec<RobotFactory> {
+    let re = regex::Regex::new(r"(\d+)").unwrap();
+
+    input
+        .lines()
+        .map(|line| {
+            let numbers: Vec<u32> = re
+                .captures_iter(line)
+                .map(|m| m.get(1).unwrap().as_str().parse::<u32>().unwrap())
+                .collect();
+            let id = numbers[0];
+            let costs = RobotCosts {
+                ore: Resources::from_one(Ore(numbers[1])),
+                clay: Resources::from_one(Ore(numbers[2])),
+                obsidian: Resources::from(&[Ore(numbers[3]), Clay(numbers[4])]),
+                geode: Resources::from(&[Ore(numbers[5]), Obsidian(numbers[6])]),
+            };
+
+            RobotFactory::new(id, costs)
+        })
+        .collect()
 }
 
 #[aoc(day19, part1)]
