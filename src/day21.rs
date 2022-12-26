@@ -144,19 +144,19 @@ pub fn part2(input: &HashMap<String, Monkey>) -> i64 {
             let rhs_value = evaluate(rhs.to_owned(), &mut monkeys);
 
             target = match operation {
-                Operation::Add => target - rhs_value,      // target = path[i+1] + rhs
+                Operation::Add => target - rhs_value, // target = path[i+1] + rhs
                 Operation::Subtract => target + rhs_value, // target = path[i+1] - rhs
                 Operation::Multiply => target / rhs_value, // target = path[i+1] * rhs
-                Operation::Divide => target * rhs_value,   // target = path[i+1] / rhs
+                Operation::Divide => target * rhs_value, // target = path[i+1] / rhs
             };
         } else {
             let lhs_value = evaluate(lhs.to_owned(), &mut monkeys);
 
             target = match operation {
-                Operation::Add => target - lhs_value,      // target = lhs + path[i+1]
+                Operation::Add => target - lhs_value, // target = lhs + path[i+1]
                 Operation::Subtract => lhs_value - target, // target = lhs - path[i+1]
                 Operation::Multiply => target / lhs_value, // target = lhs * path[i+1]
-                Operation::Divide => lhs_value / target,   // target = lhs / path[i+1]
+                Operation::Divide => lhs_value / target, // target = lhs / path[i+1]
             };
         }
     }
