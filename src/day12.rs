@@ -103,6 +103,7 @@ fn generator(input: &[u8]) -> HeightMap {
 
 #[aoc(day12, part1)]
 pub fn part1(input: &HeightMap) -> i32 {
+    // Find the shortest path from the start to the end.
     let (_, length) =
         dijkstra(&input.start, |p| next_steps(input, *p), |p| *p == input.end).unwrap();
 
@@ -111,6 +112,7 @@ pub fn part1(input: &HeightMap) -> i32 {
 
 #[aoc(day12, part2)]
 pub fn part2(input: &HeightMap) -> i32 {
+    // Walking backwards, find the shortest path from the end point to *any* point with height 0.
     let (_, length) = dijkstra(
         &input.end,
         |p| prev_steps(input, *p),

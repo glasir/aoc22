@@ -26,9 +26,15 @@ impl Data {
 impl PartialOrd for Data {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
+            // If both packets are just numbers, compare them directly.
             (Data::Int(lhs), Data::Int(rhs)) => lhs.partial_cmp(rhs),
+
+            // If one packet is a number and one a list, convert the number
+            // to a single-element list, and compare lists.
             (Data::Int(lhs), Data::List(_)) => Data::list_of(*lhs).partial_cmp(other),
             (Data::List(_), Data::Int(rhs)) => self.partial_cmp(&Data::list_of(*rhs)),
+
+            // If both packets are lists, compare elementwise.
             (Data::List(lhs), Data::List(rhs)) => {
                 for (l, r) in zip(lhs, rhs) {
                     match l.partial_cmp(r) {
@@ -46,9 +52,15 @@ impl PartialOrd for Data {
     }
 }
 
+/**
+ * Parse a single packet into a Data enum.
+ */
 fn parse_data(data: &str) -> IResult<&str, Data> {
     alt((
+        // Packets are either integers...
         map(i32, Data::Int),
+
+        // ... or comma-separated lists, delimited by [].
         map(
             delimited(tag("["), separated_list0(tag(","), parse_data), tag("]")),
             Data::List,
@@ -56,6 +68,9 @@ fn parse_data(data: &str) -> IResult<&str, Data> {
     ))(data)
 }
 
+/**
+ * Parse the input, which contains many packets separated by newlines.
+ */
 fn parse_input(input: &str) -> IResult<&str, Vec<Data>> {
     many1(terminated(parse_data, multispace0))(input)
 }
@@ -64,9 +79,11 @@ fn parse_input(input: &str) -> IResult<&str, Vec<Data>> {
 pub fn part1(input: &str) -> usize {
     let (_, packets) = parse_input(input).expect("parse error");
 
+    // Compare each pair of packets in turn.
     let mut result = 0;
     for i in (0..packets.len()).step_by(2) {
         if packets[i] < packets[i + 1] {
+            // If they're in order, add the (1-indexed) pair number to the result.
             result += 1 + i / 2;
         }
     }
@@ -78,7 +95,8 @@ pub fn part1(input: &str) -> usize {
 pub fn part2(input: &str) -> usize {
     let (_, packets) = parse_input(input).expect("parse error");
 
-    // We can avoid sorting by just comparing each divider against every packet.
+    // We can avoid sorting by comparing each divider against every packet.
+    // This is an O(N) operation rather than O(N log N).
     let divider0 = Data::list_of(2);
     let divider1 = Data::list_of(6);
 
@@ -88,7 +106,10 @@ pub fn part2(input: &str) -> usize {
     for packet in packets {
         if packet < divider0 {
             less_than_first += 1;
-            less_than_second += 1; // optimization!
+
+            // Optimization! We know [[2]] < [[6]], so if this packet is
+            // less than [[2]] it is definitely less than [[6]] as well.
+            less_than_second += 1; 
         } else if packet < divider1 {
             less_than_second += 1;
         }

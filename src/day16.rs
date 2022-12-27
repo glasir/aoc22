@@ -52,6 +52,9 @@ impl Display for Bitset {
     }
 }
 
+/**
+ * Iterator over the elements in a bitset.
+ */
 struct BitsetIterator<'a> {
     bitset: &'a Bitset,
     current: usize,
@@ -231,8 +234,9 @@ fn compress_graph(graph: &Graph) -> CompressedGraph {
  *   - the maximum pressure releasable in the remaining time.
  *
  * Preconditions:
- *   - the current room was the active room in a previous step.
- *     This
+ *   - the current room was an active room in the previous step.
+ *     Because we're working over a complete graph, this means that
+ *     after moving to a room, we *always* want to open its valve.
  */
 fn backtrack(
     graph: &CompressedGraph,

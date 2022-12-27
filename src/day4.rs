@@ -1,5 +1,9 @@
 use std::cmp::{max, min};
 
+/**
+ * Represents a closed interval over the (nonnegative) integers.
+ * For example, Range { start: 2, end: 4 } represents [2, 3, 4].
+ */
 #[derive(Clone, Copy)]
 pub struct Range {
     start: usize,
@@ -16,12 +20,20 @@ impl Range {
             .unwrap()
     }
 
+    /**
+     * Checks whether this range entirely contains another.
+     */
     fn contains(&self, other: &Range) -> bool {
         (self.start <= other.start) && (self.end >= other.end)
     }
 
+    /**
+     * Checks whether this range has any overlap with another by
+     * checking if the intersection is nonempty.
+     */
     fn overlaps(&self, other: &Range) -> bool {
-        // if the intersection is nonempty, the ranges overlap
+        // This is maybe the first time that leetcode has been
+        // useful in the real world (to the extent that AoC counts).
         max(self.start, other.start) <= min(self.end, other.end)
     }
 }

@@ -8,6 +8,20 @@ use nom::{
     IResult,
 };
 
+/*
+ * Day 22 asks us to move around a strangely-shaped map filled with
+ * obstacles. In part 1, we wrap when we go off an edge; in part 2,
+ * it turns out we're actually moving on a cube, so we have to handle
+ * the edge transitions very differently.
+ * 
+ * I am pretty happy with my solution for part 1, and extremely unhappy
+ * with my solution for part 2, which relies on hardcoding the edge
+ * transitions for my specific input shape.
+ * 
+ * So, I've put much less effort into cleaning up and commenting the code
+ * for this day's puzzle.
+ */
+
 #[derive(Debug, Clone)]
 pub enum Direction {
     Right,
@@ -81,6 +95,10 @@ impl Map {
         (row, col, direction)
     }
 
+    /**
+     * Returns the neighbor of a given cell in a given direction,
+     * wrapping when we get to the edges (i.e., part 1).
+     */
     fn neighbor_torus(
         &self,
         row: usize,
@@ -140,7 +158,7 @@ impl Map {
      *    |             |
      * (200, 0)-G--(200, 50)
      *
-     * There will be a *lot* of casework to handle moving across the edges.
+     * There is a *lot* of casework to handle moving across the edges.
      * It is probably the worst thing I have ever written.
      */
     fn neighbor_cube(
@@ -350,4 +368,8 @@ mod tests {
         let parsed = generator(&input);
         assert_eq!(part1(&parsed), 6032);
     }
+
+    // Because the cube edge transitions are hardcoded for 50x50 faces
+    // with my input's format, they don't work at all for the example.
+    // So, no test for part two.
 }

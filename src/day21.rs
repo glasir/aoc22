@@ -80,8 +80,13 @@ fn evaluate(root: String, monkeys: &mut HashMap<String, Monkey>) -> i64 {
             continue;
         }
 
+        // At least one parent was computation-typed, so
+        // we can't get a value for the current node yet.
         stack.push(name);
 
+        // Add the computation-typed parent(s) to the stack of nodes to process.
+        // Because it's a stack these will be processed before we try the
+        // current node again.
         if let Monkey::Computation(_, _, _) = &monkeys[lhs] {
             stack.push(lhs.to_owned());
         }
@@ -94,7 +99,7 @@ fn evaluate(root: String, monkeys: &mut HashMap<String, Monkey>) -> i64 {
     if let Monkey::Number(num) = monkeys[&root] {
         num
     } else {
-        panic!("could not derive value for root not")
+        panic!("could not derive value for root node")
     }
 }
 
@@ -119,27 +124,31 @@ pub fn part2(input: &HashMap<String, Monkey>) -> i64 {
     )
     .unwrap();
 
-    // "root" depends on two other monkeys; by definition the
-    // second element in the path must be the dependency under
-    // which "humn" lives. Compute the value of the other dependency.
-    let other_side = match &monkeys["root"] {
-        Monkey::Computation(lhs, rhs, _) => {
-            if *lhs == path[1] {
-                rhs
-            } else {
-                lhs
-            }
-        }
-        _ => panic!("root node cannot be a value"),
-    };
+    // The next step will be to walk that path, inverting each operation as we go.
+    // We know the "target" value of the current node; by computing the value of 
+    // the subtree not including "humn", we can figure out the target value for
+    // the subtree that *does* include "humn", then repeat.
 
-    let mut target = evaluate(other_side.to_owned(), &mut monkeys);
+    // Replace the operation of the "root" monkey with a subtraction.
+    // This lets us use the same logic here throughout the path-inverting loop.
+    // Since A == B  <==>  A - B == 0, our initial target value will be 0.
+    let root_name = "root".to_string();
+    if let Monkey::Computation(lhs, rhs, _) = &monkeys[&root_name] {
+        monkeys.insert(root_name, Monkey::Computation(lhs.to_owned(), rhs.to_owned(), Operation::Subtract));
+    } else {
+        panic!("root node cannot be a value");
+    }
 
-    // Walk the path, inverting each operation in turn.
-    for i in 1..path.len() - 1 {
+    let mut target = 0;
+
+    // Now we can walk over the path.
+    for i in 0..path.len() - 1 {
         let Monkey::Computation(lhs, rhs, operation) = monkeys[&path[i]].to_owned()
         else { panic!("unexpected value at {}: {:?}", path[i], &monkeys[&path[i]]) };
 
+        // Since division and subtraction are not commutative, we need to handle
+        // the case where "humn" is in the left subtree differently from when it
+        // is in the right subtree.
         if lhs == path[i + 1] {
             let rhs_value = evaluate(rhs.to_owned(), &mut monkeys);
 

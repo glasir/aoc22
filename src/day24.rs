@@ -13,21 +13,35 @@ pub enum Direction {
 type Point = (i32, i32);
 type Blizzard = (Point, Direction);
 
+/**
+ * Returns the state of the valley at a specific point in time.
+ */
 #[derive(Clone)]
 pub struct State {
+    // The points in the valley occupied by blizzards.
     obstacles: HashSet<Point>,
+
+    // A list of the blizzards themselves. This is stored separately
+    // to make accessing the set of obstacles more efficient.
     blizzards: Vec<Blizzard>,
+
+    // The size of the valley, in (rows, cols).
     dimensions: (i32, i32),
+
+    // The starting and ending points (just stored for display purposes).
     start: Point,
     end: Point,
 }
 
 impl State {
+    /**
+     * Generates the valley state at the next time step.
+     */
     fn next(&self) -> State {
-        // Move each blizzard one step forward (wrapping if necessary).
         let mut blizzards = Vec::new();
         let mut obstacles = HashSet::new();
 
+        // Move each blizzard forward, wrapping if necessary.
         for blizzard in self.blizzards.iter() {
             let new_blizzard = self.move_blizzard(blizzard);
             obstacles.insert(new_blizzard.0);
@@ -37,12 +51,17 @@ impl State {
         State {
             obstacles,
             blizzards,
+
+            // Everything except the blizzards (and obstacles) stays the same.
             dimensions: self.dimensions,
             start: self.start,
             end: self.end,
         }
     }
 
+    /**
+     * Moves a blizzard forward one unit, wrapping if necessary.
+     */
     fn move_blizzard(&self, blizzard: &Blizzard) -> Blizzard {
         let coords = &blizzard.0;
         let new_coords = match blizzard.1 {
@@ -136,6 +155,16 @@ impl fmt::Debug for State {
     }
 }
 
+/**
+ * Returns the set of empty locations that are:
+ *   1. adjacent to the given point
+ *   2. inside the valley, or the start/end point
+ *   3. not occupied by a blizzard
+ * 
+ * Assumes that you can always move to the start or end points;
+ * this relies on there not being a vertically-moving blizzard in 
+ * either column, which is the case for all inputs AFAIK.
+ */
 fn neighbors(state: &State, point: &Point) -> Vec<Point> {
     [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
         .iter()
@@ -152,16 +181,38 @@ fn neighbors(state: &State, point: &Point) -> Vec<Point> {
         .collect::<Vec<_>>()
 }
 
+/**
+ * Determines when an expedition at `start` will make it to `end, given that they
+ * start moving at time `start_time`.
+ * 
+ * The main challenge for this problem is that the usual pathfinding algorithms
+ * stop working when you have obstacles that move over time.
+ * 
+ * So, the key insight to solving it is that we need to transform the search space
+ * into one where the obstacles *aren't* moving. We can do this by adding in a
+ * third dimension - time - and searching in this 3D space.
+ * 
+ * My mental image was like one of those video game levels where you're skydiving
+ * and have to move to dodge obstacles that pop up. Yours might be different :)
+ * 
+ * Anyways, this basically just runs A* on a 3D grid, where allowable moves are
+ * those that move forward 1 step in time to a point without a blizzard in it.
+ * I used Manhattan distance as the A* heuristic, which seems to work pretty well.
+ */
 fn arrival_time(start: &Point, end: &Point, start_time: usize, states: &mut Vec<State>) -> u32 {
     let (_, distance) = astar(
         &(*start, start_time),
         |(p, time)| {
+            // If we don't have a state for t = `time + 1` yet, generate it.
             if states.len() <= 1 + time {
                 let last_state = states.last().unwrap();
                 let next_state = last_state.next();
                 states.push(next_state);
             }
 
+            // Now figure out which (row, col, t) points are accessible.
+            // For this A* library we need to return a tuple (neighbor, distance);
+            // we're on a grid so all distances are identically 1.
             neighbors(&states[time + 1], p)
                 .iter()
                 .map(|&neighbor| ((neighbor, time + 1), 1))
@@ -172,6 +223,7 @@ fn arrival_time(start: &Point, end: &Point, start_time: usize, states: &mut Vec<
     )
     .expect("no path found");
 
+    // Make sure to add in the start time!
     start_time as u32 + distance
 }
 
@@ -233,19 +285,19 @@ pub fn part2(input: &State) -> u32 {
     let mut states = Vec::new();
     states.push(input.clone());
 
+    // Go from the start to the end.
     let get_to_end = arrival_time(&input.start, &input.end, 0, &mut states);
-    println!("Got to the end at time {}", get_to_end);
 
+    // Oops, the elves forgot snacks. Head back to the start.
     let back_to_start = arrival_time(&input.end, &input.start, get_to_end as usize, &mut states);
-    println!("Back at the start at time {}", back_to_start);
 
+    // Aaaand finally we can finish our journey.
     let back_to_end = arrival_time(
         &input.start,
         &input.end,
         back_to_start as usize,
         &mut states,
     );
-    println!("Finished (with snacks) at time {}", back_to_end);
 
     back_to_end
 }

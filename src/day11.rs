@@ -10,6 +10,16 @@ use nom::{
     IResult,
 };
 
+/**
+ * Each monkey performs some mathematical operation.
+ * 
+ * Each operation has an operator (add or multiply).
+ * 
+ * Each operand has two parameters: the current value,
+ * and either "old" (the current value), or an integer.
+ * 
+ * These enums just capture this structure.
+ */
 enum Operand {
     Old,
     Value(u64),
@@ -124,7 +134,13 @@ fn parse_monkey(input: &str) -> IResult<&str, Monkey> {
 /*************************
  * The actual solutions! *
  *************************/
-// Take a turn. Returns a list of pairs (item, target_monkey_idx)
+
+/**
+ * Take a turn. Returns a list of pairs (item, target_monkey_idx).
+ * 
+ * The second parameter here is the "worry reducer". For part 1, it's |x| x / 3.
+ * Part 2 asks us to figure something else out.
+ */ 
 fn turn(monkey: &mut Monkey, worry_reducer: impl Fn(u64) -> u64) -> Vec<(u64, u64)> {
     monkey
         .items
@@ -138,6 +154,7 @@ fn turn(monkey: &mut Monkey, worry_reducer: impl Fn(u64) -> u64) -> Vec<(u64, u6
             // Monkey loses interest
             worry = worry_reducer(worry);
 
+            // Figure out which monkey to throw the item to.
             let catcher = if worry % monkey.divisor == 0 {
                 monkey.if_true
             } else {
@@ -149,17 +166,28 @@ fn turn(monkey: &mut Monkey, worry_reducer: impl Fn(u64) -> u64) -> Vec<(u64, u6
         .collect()
 }
 
+/**
+ * Does a whole round of monkey business: each monkey takes a single turn.
+ */
 fn round(monkeys: &mut Vec<Monkey>, worry_reducer: &impl Fn(u64) -> u64) {
     for idx in 0..monkeys.len() {
+        // What items are being thrown, and to whom?
         let moves = turn(&mut monkeys[idx], worry_reducer);
 
+        // Throw the items to each catching monkey in turn.
         for (item, to) in moves {
             monkeys[to as usize].items.push_back(item);
         }
     }
 }
 
+/**
+ * Finds the two monkeys with the highest number of items inspected,
+ * and multiplies their inspection counts.
+ */
 fn monkey_business(monkeys: &Vec<Monkey>) -> u64 {
+    // This is a little clunky, but it's a bit faster than sorting
+    // and taking the top two.
     let mut most: u64 = 0;
     let mut next: u64 = 0;
 
@@ -191,12 +219,24 @@ pub fn part1(input: &str) -> u64 {
 pub fn part2(input: &str) -> u64 {
     let (_, mut monkeys) = many1(parse_monkey)(input).expect("parse error!");
 
+    // Stupid math trick alert!
+    //
+    // Each monkey cares about computing an item's worry value modulo some prime.
+    // Those remainders don't change if we first take the worry value modulo some multiple
+    // of that prime. By picking the LCM of all of the monkeys' primes, we get a modulus
+    // that has this property for every monkey simultaneously.
+    //
+    // We can then make our worry-reducing function `|n| n % modulus`, which guarantees that
+    // an item's worry value cannot ever be above our modulus.
     let modulus: u64 = monkeys
         .iter()
         .map(|m| m.divisor)
         .fold(1u64, num::integer::lcm);
 
     let worry_reducer = |n| n % modulus;
+
+    // There might be a cycle-finding trick in here to reduce runtime, but just simulating
+    // finishes pretty quickly.
     for _ in 0..10_000 {
         round(&mut monkeys, &worry_reducer);
     }

@@ -36,23 +36,18 @@ impl Point {
     }
 
     fn move_towards(&mut self, other: Point) {
-        match (other.x - self.x, other.y - self.y) {
-            (-1, -1)
-            | (0, -1)
-            | (1, -1)
-            | (-1, 0)
-            | (0, 0)
-            | (1, 0)
-            | (-1, 1)
-            | (0, 1)
-            | (1, 1) => {}
-            (0, dy) => self.y += dy / 2,
-            (dx, 0) => self.x += dx / 2,
-            (dx, dy) => {
-                self.x += dx / dx.abs();
-                self.y += dy / dy.abs();
-            }
+        let dx = other.x - self.x;
+        let dy = other.y - self.y;
+
+        // If directly adjacent, don't move.
+        if dx.abs() <= 1 && dy.abs() <= 1 {
+            return;
         }
+
+        // Otherwise move 0 or 1 units horizontally and
+        // 0 or 1 units vertically towards `other`.
+        self.x += dx.signum();
+        self.y += dy.signum();
     }
 }
 

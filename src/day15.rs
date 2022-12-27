@@ -51,8 +51,14 @@ fn get_covered_intervals(points_and_beacons: &[(Point, Point)], target_y: i32) -
     let mut intervals: Vec<Interval> = points_and_beacons
         .iter()
         .filter_map(|(point, beacon)| {
+            // The distance to the nearest beacon. Any other beacon must be further than this.
             let distance = (beacon.x - point.x).abs() + (beacon.y - point.y).abs();
+
+            // If we travel directly from the point to the line at y = target_y, we'll
+            // use some amount of our distance "budget" to get there.
             let distance_to_line = (target_y - point.y).abs();
+
+            // The remaining distance budget can be spent spreading horizontally along the line.
             let spread = distance - distance_to_line;
             if spread >= 0 {
                 Some(Interval {
@@ -78,9 +84,15 @@ fn get_covered_intervals(points_and_beacons: &[(Point, Point)], target_y: i32) -
 
     // Now go through the list in turn, either extending the current interval or starting a new one.
     for interval in intervals.iter().skip(1) {
+        // Optimizations!
+        // We can use a <= comparison because the union of the intervals [0, 4] and [4, 8] is [0, 8].
+        // And because we're looking at intervals over the integers, we can compare against end+1
+        // since the union of [0, 4] and [5, 8] is *also* [0, 8].
         if interval.start <= current.end + 1 {
             current.end = max(current.end, interval.end);
         } else {
+            // The current interval doesn't overlap the next one; add it to the list, and
+            // start merging from the next interval.
             merged.push(current);
             current = *interval;
         }
@@ -89,6 +101,9 @@ fn get_covered_intervals(points_and_beacons: &[(Point, Point)], target_y: i32) -
     merged
 }
 
+/**
+ * Returns the total number of points covered by a list of nonoverlapping intervals.
+ */
 fn count_covered_points(intervals: &[Interval]) -> i32 {
     // Since we know our intervals are non-overlapping, this is easy.
     intervals.iter().map(|int| int.end - int.start + 1).sum()
@@ -118,7 +133,12 @@ fn tuning_frequency(point: &Point) -> usize {
     (point.x as usize) * 4_000_000 + (point.y as usize)
 }
 
-// Takes a vector of *non-overlapping* intervals.
+/**
+ * Takes a vector of *non-overlapping* intervals and "clamps" them so that
+ * no points outside of a given range are included.
+ * 
+ * Example: clamp_intervals([ [-10, 5], [14, 20] ], 0, 15) -> [ [0,5], [14,15] ]
+ */
 fn clamp_intervals(intervals: &Vec<Interval>, minimum: i32, maximum: i32) -> Vec<Interval> {
     let mut result: Vec<Interval> = Vec::new();
     let mut i: usize = 0;
@@ -140,8 +160,14 @@ fn clamp_intervals(intervals: &Vec<Interval>, minimum: i32, maximum: i32) -> Vec
     result
 }
 
+/**
+ * Finds a point with x- and y-coordinates of at most max_coord that is not covered
+ * by any of the beacons identified.
+ * 
+ * This is a very brute-force approach: we just go one y-coordinate at a time and check
+ * whether there are any uncovered points with that y-coordinate.
+ */
 fn find_uncovered_point(points_and_beacons: &[(Point, Point)], max_coord: i32) -> Option<Point> {
-    // First attempt: extremely brute force.
     for y in 0..=max_coord {
         let intervals = get_covered_intervals(points_and_beacons, y);
 

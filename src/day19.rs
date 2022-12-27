@@ -64,6 +64,7 @@ impl Resources {
      * or Some(difference) if there's enough of each material.
      */
     fn checked_sub(&self, other: Self) -> Option<Self> {
+        // We explicitly *want* an underflowing subtraction.
         let difference = self.data.wrapping_sub(other.data);
 
         // We're not really subtracting u32's, we're subtracting four u8's in parallel.
@@ -200,7 +201,7 @@ impl RobotFactory {
 
     /*
      * The next several functions attempt to build a robot starting from an
-     * initial factory state, given the number of minute remaining.
+     * initial factory state, given the number of minutes remaining.
      *
      * Returns either:
      *   * None, if the robot cannot be completed in the time remaining, or

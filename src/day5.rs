@@ -1,11 +1,26 @@
 use std::{collections::VecDeque, fmt::Display};
 use text_io::scan;
 
+/**
+ * Holds the state of the stacks of crates.
+ * 
+ * `stacks[i]` contains the crates in the i-th stack, with
+ * the bottom crate in stacks[i][0].
+ * 
+ * The problem statement uses 1-indexing for the stacks; we
+ * convert this to 0-indexing at parse time. So "Stack 1"
+ * in the problem statement is stacks[0] here.
+ */
 #[derive(Clone)]
 pub struct State {
     stacks: Vec<VecDeque<char>>,
 }
 
+/**
+ * A single step in the crate-rearrangement procedure.
+ * 
+ * The stack indices are 0-based here as well.
+ */
 pub struct Step {
     count: usize,
     from: usize,
@@ -13,6 +28,14 @@ pub struct Step {
 }
 
 impl State {
+    /**
+     * Applies a single step ("move N from A to B") to the state.
+     * 
+     * The third parameter specifies whether to reverse the order of the crates
+     * before adding them to their new stack. This lets us use one function to
+     * handle both parts of the problem: "move 3 crates, 1 at a time" is
+     * equivalent to "get three crates, reverse their order, and append them".
+     */
     fn apply(&mut self, step: &Step, reverse: bool) {
         let mut crates = self.remove_crates(step.from, step.count);
 
@@ -23,17 +46,27 @@ impl State {
         self.add_crates(step.to, crates);
     }
 
+    /**
+     * Adds a list of crates to the top of a stack.
+     */
     fn add_crates(&mut self, stack: usize, crates: Vec<char>) {
-        self.stacks[stack - 1].extend(crates.iter())
+        self.stacks[stack].extend(crates.iter())
     }
 
+    /**
+     * Removes crates from a stack, returning the removed crates in a list.
+     */
     fn remove_crates(&mut self, stack: usize, count: usize) -> Vec<char> {
-        let initial_len = self.stacks[stack - 1].len();
-        self.stacks[stack - 1]
+        let initial_len = self.stacks[stack].len();
+        self.stacks[stack]
             .drain(initial_len - count..)
             .collect()
     }
 
+    /**
+     * Returns a string containing the letters of the crates at the top
+     * of each stack in order.
+     */
     fn top_crates(&self) -> String {
         self.stacks
             .iter()
@@ -45,7 +78,8 @@ impl State {
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         for i in 0..self.stacks.len() {
-            write!(f, "{}:", i)?;
+            // Add 1 to switch back to 1-indexing
+            write!(f, "{}:", i + 1)?;
             for krate in &self.stacks[i] {
                 write!(f, " {}", krate)?;
             }
@@ -56,7 +90,8 @@ impl Display for State {
 
 impl Display for Step {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "move {} from {} to {}", self.count, self.from, self.to)
+        // Remember to switch back to 1-indexing.
+        write!(f, "move {} from {} to {}", self.count, self.from + 1, self.to + 1)
     }
 }
 
@@ -88,9 +123,12 @@ pub fn generator(input: &str) -> (State, Vec<Step>) {
     let steps: Vec<Step> = lines
         .filter(|line| line.starts_with("move"))
         .map(|line| {
-            let (count, from, to);
+            let (count, from, to): (usize, usize, usize);
             scan!(line.bytes() => "move {} from {} to {}", count, from, to);
-            Step { count, from, to }
+
+            // Create a new Step object. Subtract 1 from the stack indicies
+            // to correct for AoC's 1-indexing.
+            Step { count, from: from - 1, to: to - 1 }
         })
         .collect();
 

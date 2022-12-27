@@ -14,6 +14,9 @@ enum Direction {
 }
 
 impl Direction {
+    /**
+     * Returns the next direction for an elf to try moving.
+     */
     fn next(&self) -> Self {
         match self {
             Direction::North => Direction::South,
@@ -23,6 +26,10 @@ impl Direction {
         }
     }
 
+    /**
+     * Returns the point 1 unit in this direction from 
+     * a given starting point.
+     */
     fn of(&self, point: Point) -> Point {
         match self {
             Direction::North => (point.0 - 1, point.1),
@@ -51,6 +58,7 @@ fn generator(input: &str) -> Elves {
     elves
 }
 
+#[allow(dead_code)]
 fn print_map(elves: &Elves) {
     let (lower_bounds, upper_bounds) = bounding_box(elves);
     for row in lower_bounds.0..=upper_bounds.0 {
@@ -65,7 +73,14 @@ fn print_map(elves: &Elves) {
     }
 }
 
+/**
+ * Returns true iff the given point has any neighboring cells occupied.
+ * 
+ * Assumes that the point is itself occupied.
+ */
 fn has_neighbors(point: Point, elves: &Elves) -> bool {
+    // This would probably be more efficient if I just hardcoded all of the coordinates,
+    // but using cartesian_product() is ~~cool~~.
     (-1..=1)
         .cartesian_product(-1..=1)
         .filter(|(dx, dy)| elves.contains(&(point.0 + dx, point.1 + dy)))
@@ -73,6 +88,9 @@ fn has_neighbors(point: Point, elves: &Elves) -> bool {
         > 1
 }
 
+/**
+ * Returns true iff all of the neighboring cells in a given direction are empty.
+ */
 fn empty_in_direction(point: Point, direction: &Direction, elves: &Elves) -> bool {
     let deltas_to_check = match direction {
         Direction::North => [(-1, -1), (-1, 0), (-1, 1)],
@@ -90,6 +108,12 @@ fn empty_in_direction(point: Point, direction: &Direction, elves: &Elves) -> boo
     num_occupied_spots == 0
 }
 
+/**
+ * Gets the proposed movement for an elf at `point`.
+ * 
+ * The elf will consider moving `initial_direction` first.
+ * If no movement is possible, or the elf is already happy with his position, returns None.
+ */
 fn proposed_move(point: Point, initial_direction: &Direction, elves: &Elves) -> Option<(i32, i32)> {
     if !has_neighbors(point, elves) {
         return None;
@@ -107,14 +131,21 @@ fn proposed_move(point: Point, initial_direction: &Direction, elves: &Elves) -> 
     None
 }
 
+/**
+ * Moves all elves according to the problem's rules.
+ * 
+ * Returns true if at least one elf moved, or false if none did so.
+ */
 fn do_round(elves: &mut Elves, direction: &mut Direction) -> bool {
     let mut any_moved = false;
 
+    // Get a mapping of (original location) -> (proposed location) for each elf.
     let proposed_moves: HashMap<Point, Point> = elves
         .iter()
         .filter_map(|&p| proposed_move(p, direction, elves).map(|new_p| (p, new_p)))
         .collect();
 
+    // Count the number of elves who proposed moving to each point.
     let mut destinations: HashMap<&Point, usize> = HashMap::new();
     for dest in proposed_moves.values() {
         let new_count = match destinations.get(dest) {
@@ -125,18 +156,26 @@ fn do_round(elves: &mut Elves, direction: &mut Direction) -> bool {
         destinations.insert(dest, new_count);
     }
 
+    // Figure out which moves will actually be made.
     for (elf, dest) in proposed_moves.iter() {
+        // Was this elf the only one who proposed moving to `dest`?
         if destinations[dest] == 1 {
+            // If so, move it.
             elves.remove(elf);
             elves.insert(*dest);
             any_moved = true;
         }
     }
 
+    // The first direction considered will be different next round.
     *direction = direction.next();
 
     any_moved
 }
+
+/*
+ * The usual functions for computing a bounding box.
+ */
 
 fn lower_bounds(lhs: &Point, rhs: &Point) -> Point {
     (min(lhs.0, rhs.0), min(lhs.1, rhs.1))
@@ -165,15 +204,11 @@ fn bounding_box(elves: &Elves) -> (Point, Point) {
 pub fn part1(input: &Elves) -> i32 {
     let mut elves = input.clone();
     let mut direction = Direction::North;
-    println!("Before:");
-    print_map(&elves);
 
+    // Run 10 rounds, then find the bounding box size.
     for _ in 0..10 {
         do_round(&mut elves, &mut direction);
     }
-
-    println!("After:");
-    print_map(&elves);
 
     let (lower_bounds, upper_bounds) = bounding_box(&elves);
 
@@ -186,16 +221,12 @@ pub fn part1(input: &Elves) -> i32 {
 pub fn part2(input: &Elves) -> u32 {
     let mut elves = input.clone();
     let mut direction = Direction::North;
-    println!("Before:");
-    print_map(&elves);
 
+    // Iterate until no elves move.
     let mut rounds = 1;
     while do_round(&mut elves, &mut direction) {
         rounds += 1;
     }
-
-    println!("After:");
-    print_map(&elves);
 
     rounds
 }
@@ -211,12 +242,7 @@ mod tests {
                            #.###..\n\
                            ##.#.##\n\
                            .#..#..\n";
-    // const EXAMPLE: &str = ".....\n\
-    //                        ..##.\n\
-    //                        ..#..\n\
-    //                        .....\n\
-    //                        ..##.\n\
-    //                        .....\n";
+
     #[test]
     fn test_part1() {
         let input = generator(EXAMPLE);

@@ -22,12 +22,6 @@ fn parse_line(input: &str) -> IResult<&str, (i32, i32, i32)> {
     ))(input)
 }
 
-#[aoc_generator(day18)]
-fn generator(input: &str) -> State {
-    let (_, lavas) = many1(parse_line)(input).expect("parse error");
-    lavas.iter().cloned().collect()
-}
-
 fn neighbors(point: &Point) -> Vec<Point> {
     vec![
         (point.0 - 1, point.1, point.2),
@@ -39,8 +33,16 @@ fn neighbors(point: &Point) -> Vec<Point> {
     ]
 }
 
+#[aoc_generator(day18)]
+fn generator(input: &str) -> State {
+    let (_, lavas) = many1(parse_line)(input).expect("parse error");
+    lavas.iter().cloned().collect()
+}
+
 #[aoc(day18, part1)]
 pub fn part1(lava: &State) -> usize {
+    // For part 1, we want to count all of the faces of lava blocks that aren't
+    // themselves facing another lava block.
     lava.iter()
         .map(|point| {
             neighbors(point)
@@ -51,6 +53,9 @@ pub fn part1(lava: &State) -> usize {
         .sum()
 }
 
+/*
+ * The next few functions implement a 3D bounding box for part 2. 
+ */
 fn lower_bounds(lhs: &Point, rhs: &Point) -> Point {
     (min(lhs.0, rhs.0), min(lhs.1, rhs.1), min(lhs.2, rhs.2))
 }
