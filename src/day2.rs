@@ -3,14 +3,17 @@
  *  ROCK = 0
  *  PAPER = 1
  *  SCISSORS = 2
+ * 
+ * In the problem description, these are 1-indexed instead
+ * of 0-indexed, which will affect our scoring function later.
  */
 
-// returns the play that beats `other`
+// Returns the play that beats `other`
 fn beats(other: u32) -> u32 {
     (other + 1) % 3
 }
 
-// returns the play that loses to `other`
+// Returns the play that loses to `other`
 fn loses_to(other: u32) -> u32 {
     (other + 2) % 3
 }
@@ -25,6 +28,8 @@ pub fn part1(input: &str) -> u32 {
             let my_choice = u32::from(bytes[2] - b'X');
 
             if my_choice == opp_choice {
+                // A tie is three points, plus the value of my choice.
+                // Add an additional 1 to account for 0- vs 1-indexing.
                 4 + my_choice
             } else if my_choice == beats(opp_choice) {
                 7 + my_choice

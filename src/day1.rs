@@ -1,28 +1,6 @@
 use itertools::Itertools;
 
-#[allow(dead_code)]
-fn parse_imperative(input: &str) -> Vec<u32> {
-    let mut totals: Vec<u32> = Vec::new();
-    let mut current: u32 = 0;
-
-    for line in input.lines() {
-        if line.is_empty() {
-            totals.push(current);
-            current = 0;
-        } else {
-            current += line.parse::<u32>().ok().unwrap();
-        }
-    }
-
-    if current != 0 {
-        totals.push(current);
-    }
-
-    totals
-}
-
-#[allow(dead_code)]
-fn parse_functional(input: &str) -> Vec<u32> {
+fn parse(input: &str) -> Vec<u32> {
     input
         // Each elf's stack of cookies is separated by an empty line, so
         // splitting on \n\n gives us chunks of data separated by elf.
@@ -32,10 +10,6 @@ fn parse_functional(input: &str) -> Vec<u32> {
             // to an integer, and add them up to get the elf's total calories.
             group.lines().filter_map(|line| line.parse::<u32>().ok()).sum())
         .collect()
-}
-
-fn parse(input: &str) -> Vec<u32> {
-    parse_imperative(input)
 }
 
 #[aoc(day1, part1)]
