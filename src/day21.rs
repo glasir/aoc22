@@ -125,7 +125,7 @@ pub fn part2(input: &HashMap<String, Monkey>) -> i64 {
     .unwrap();
 
     // The next step will be to walk that path, inverting each operation as we go.
-    // We know the "target" value of the current node; by computing the value of 
+    // We know the "target" value of the current node; by computing the value of
     // the subtree not including "humn", we can figure out the target value for
     // the subtree that *does* include "humn", then repeat.
 
@@ -134,7 +134,10 @@ pub fn part2(input: &HashMap<String, Monkey>) -> i64 {
     // Since A == B  <==>  A - B == 0, our initial target value will be 0.
     let root_name = "root".to_string();
     if let Monkey::Computation(lhs, rhs, _) = &monkeys[&root_name] {
-        monkeys.insert(root_name, Monkey::Computation(lhs.to_owned(), rhs.to_owned(), Operation::Subtract));
+        monkeys.insert(
+            root_name,
+            Monkey::Computation(lhs.to_owned(), rhs.to_owned(), Operation::Subtract),
+        );
     } else {
         panic!("root node cannot be a value");
     }

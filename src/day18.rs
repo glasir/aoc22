@@ -54,7 +54,7 @@ pub fn part1(lava: &State) -> usize {
 }
 
 /*
- * The next few functions implement a 3D bounding box for part 2. 
+ * The next few functions implement a 3D bounding box for part 2.
  */
 fn lower_bounds(lhs: &Point, rhs: &Point) -> Point {
     (min(lhs.0, rhs.0), min(lhs.1, rhs.1), min(lhs.2, rhs.2))

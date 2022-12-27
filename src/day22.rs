@@ -13,11 +13,11 @@ use nom::{
  * obstacles. In part 1, we wrap when we go off an edge; in part 2,
  * it turns out we're actually moving on a cube, so we have to handle
  * the edge transitions very differently.
- * 
+ *
  * I am pretty happy with my solution for part 1, and extremely unhappy
  * with my solution for part 2, which relies on hardcoding the edge
  * transitions for my specific input shape.
- * 
+ *
  * So, I've put much less effort into cleaning up and commenting the code
  * for this day's puzzle.
  */

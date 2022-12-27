@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 /**
  * Unusually, basically all of the work happens in the parse step.
- * 
+ *
  * This function returns a vector containing the value of `x` at each
  * time step.
  */

@@ -3,7 +3,7 @@
  *  ROCK = 0
  *  PAPER = 1
  *  SCISSORS = 2
- * 
+ *
  * In the problem description, these are 1-indexed instead
  * of 0-indexed, which will affect our scoring function later.
  */

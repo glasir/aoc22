@@ -12,12 +12,12 @@ use nom::{
 
 /**
  * Each monkey performs some mathematical operation.
- * 
+ *
  * Each operation has an operator (add or multiply).
- * 
+ *
  * Each operand has two parameters: the current value,
  * and either "old" (the current value), or an integer.
- * 
+ *
  * These enums just capture this structure.
  */
 enum Operand {
@@ -137,10 +137,10 @@ fn parse_monkey(input: &str) -> IResult<&str, Monkey> {
 
 /**
  * Take a turn. Returns a list of pairs (item, target_monkey_idx).
- * 
+ *
  * The second parameter here is the "worry reducer". For part 1, it's |x| x / 3.
  * Part 2 asks us to figure something else out.
- */ 
+ */
 fn turn(monkey: &mut Monkey, worry_reducer: impl Fn(u64) -> u64) -> Vec<(u64, u64)> {
     monkey
         .items

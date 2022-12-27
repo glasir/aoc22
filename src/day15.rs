@@ -136,7 +136,7 @@ fn tuning_frequency(point: &Point) -> usize {
 /**
  * Takes a vector of *non-overlapping* intervals and "clamps" them so that
  * no points outside of a given range are included.
- * 
+ *
  * Example: clamp_intervals([ [-10, 5], [14, 20] ], 0, 15) -> [ [0,5], [14,15] ]
  */
 fn clamp_intervals(intervals: &Vec<Interval>, minimum: i32, maximum: i32) -> Vec<Interval> {
@@ -163,7 +163,7 @@ fn clamp_intervals(intervals: &Vec<Interval>, minimum: i32, maximum: i32) -> Vec
 /**
  * Finds a point with x- and y-coordinates of at most max_coord that is not covered
  * by any of the beacons identified.
- * 
+ *
  * This is a very brute-force approach: we just go one y-coordinate at a time and check
  * whether there are any uncovered points with that y-coordinate.
  */

@@ -8,12 +8,12 @@ fn priority(item: u8) -> usize {
 
 /**
  * A very simple bitset specialized for day 3.
- * 
+ *
  * The i-th bit is 1 if a character with priority i has been
  * added to the set, and is 0 otherwise.
  */
 struct CharSet {
-    counts: u64
+    counts: u64,
 }
 
 impl CharSet {

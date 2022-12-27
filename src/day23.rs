@@ -27,7 +27,7 @@ impl Direction {
     }
 
     /**
-     * Returns the point 1 unit in this direction from 
+     * Returns the point 1 unit in this direction from
      * a given starting point.
      */
     fn of(&self, point: Point) -> Point {
@@ -75,7 +75,7 @@ fn print_map(elves: &Elves) {
 
 /**
  * Returns true iff the given point has any neighboring cells occupied.
- * 
+ *
  * Assumes that the point is itself occupied.
  */
 fn has_neighbors(point: Point, elves: &Elves) -> bool {
@@ -110,7 +110,7 @@ fn empty_in_direction(point: Point, direction: &Direction, elves: &Elves) -> boo
 
 /**
  * Gets the proposed movement for an elf at `point`.
- * 
+ *
  * The elf will consider moving `initial_direction` first.
  * If no movement is possible, or the elf is already happy with his position, returns None.
  */
@@ -133,7 +133,7 @@ fn proposed_move(point: Point, initial_direction: &Direction, elves: &Elves) -> 
 
 /**
  * Moves all elves according to the problem's rules.
- * 
+ *
  * Returns true if at least one elf moved, or false if none did so.
  */
 fn do_round(elves: &mut Elves, direction: &mut Direction) -> bool {

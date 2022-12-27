@@ -6,7 +6,7 @@ use std::{
 
 /**
  * The various materials used in this problem.
- * 
+ *
  * It doesn't really matter when simulating whether a grain of sand
  * is stopped by rock or by more sand, but this makes for a nicer picture.
  */
@@ -19,7 +19,7 @@ enum Material {
 
 /**
  * The cave into which we're dropping sand.
- * 
+ *
  * Uses a sparse map of (x,y) -> material, and tracks the bounding
  * box of all of the walls in the cave so we can tell when sand
  * starts to escape.
@@ -96,7 +96,7 @@ impl Cave {
 
     /**
      * Simulates dropping a grain of sand from the source point.
-     * 
+     *
      * If the sand stops falling at a point (x,y) within the cave, returns Some((x,y)).
      * If the sand exits the cave's bounding box, returns None.
      */

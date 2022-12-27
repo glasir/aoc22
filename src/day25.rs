@@ -252,6 +252,6 @@ mod tests {
 
     #[test]
     fn test_part1() {
-        assert_eq!(part1(&EXAMPLE), "2=-1=0");
+        assert_eq!(part1(EXAMPLE), "2=-1=0");
     }
 }

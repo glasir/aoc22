@@ -59,7 +59,6 @@ fn parse_data(data: &str) -> IResult<&str, Data> {
     alt((
         // Packets are either integers...
         map(i32, Data::Int),
-
         // ... or comma-separated lists, delimited by [].
         map(
             delimited(tag("["), separated_list0(tag(","), parse_data), tag("]")),
@@ -109,7 +108,7 @@ pub fn part2(input: &str) -> usize {
 
             // Optimization! We know [[2]] < [[6]], so if this packet is
             // less than [[2]] it is definitely less than [[6]] as well.
-            less_than_second += 1; 
+            less_than_second += 1;
         } else if packet < divider1 {
             less_than_second += 1;
         }

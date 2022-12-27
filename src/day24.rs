@@ -160,9 +160,9 @@ impl fmt::Debug for State {
  *   1. adjacent to the given point
  *   2. inside the valley, or the start/end point
  *   3. not occupied by a blizzard
- * 
+ *
  * Assumes that you can always move to the start or end points;
- * this relies on there not being a vertically-moving blizzard in 
+ * this relies on there not being a vertically-moving blizzard in
  * either column, which is the case for all inputs AFAIK.
  */
 fn neighbors(state: &State, point: &Point) -> Vec<Point> {
@@ -184,17 +184,17 @@ fn neighbors(state: &State, point: &Point) -> Vec<Point> {
 /**
  * Determines when an expedition at `start` will make it to `end, given that they
  * start moving at time `start_time`.
- * 
+ *
  * The main challenge for this problem is that the usual pathfinding algorithms
  * stop working when you have obstacles that move over time.
- * 
+ *
  * So, the key insight to solving it is that we need to transform the search space
  * into one where the obstacles *aren't* moving. We can do this by adding in a
  * third dimension - time - and searching in this 3D space.
- * 
+ *
  * My mental image was like one of those video game levels where you're skydiving
  * and have to move to dodge obstacles that pop up. Yours might be different :)
- * 
+ *
  * Anyways, this basically just runs A* on a 3D grid, where allowable moves are
  * those that move forward 1 step in time to a point without a blizzard in it.
  * I used Manhattan distance as the A* heuristic, which seems to work pretty well.
@@ -292,14 +292,12 @@ pub fn part2(input: &State) -> u32 {
     let back_to_start = arrival_time(&input.end, &input.start, get_to_end as usize, &mut states);
 
     // Aaaand finally we can finish our journey.
-    let back_to_end = arrival_time(
+    arrival_time(
         &input.start,
         &input.end,
         back_to_start as usize,
         &mut states,
-    );
-
-    back_to_end
+    )
 }
 
 #[cfg(test)]
